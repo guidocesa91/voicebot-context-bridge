@@ -1,0 +1,3 @@
+{$DOMAIN:connector.midominio.com} {
+	reverse_proxy conector:8080
+}
