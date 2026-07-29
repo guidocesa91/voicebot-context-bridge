@@ -9,8 +9,10 @@ Claude Code. Las fases al final tienen checkboxes: se van marcando a medida que 
 
 > **Estado (29/07/2026): el flujo completo funciona de punta a punta.** Llamada → bot →
 > `guardar_contexto` → SIP REFER → el interno suena → pop-up automático en Linkus con el
-> contexto. Fases 0 a 4 cerradas. Lo que falta es §10 Fase 5 (robustez) y definir el
-> **destino productivo** del REFER, que hoy apunta al interno de pruebas `9999`.
+> contexto **y las últimas 10 interacciones previas de ese número**. Fases 0 a 4 cerradas.
+> Lo que falta es §10 Fase 5 (robustez) y el **destino del REFER**, que hoy apunta al interno
+> de pruebas `9999` — es un parámetro por instalación, no una decisión pendiente del código
+> (ver §9.3.1).
 
 El stack técnico detallado (versiones, paquetes, requisitos) está en **[STACK.md](STACK.md)**.
 El diagnóstico de la transferencia SIP REFER (causa raíz, arreglo y descartes) está en
@@ -175,8 +177,21 @@ Lo llama el webhook tool del bot, justo antes del REFER. Auth: `Authorization: B
   "intent": "cambio_direccion_entrega",
   "fields": { "pedido": "48213", "cliente_id": "00291", "verificado": true }
 }
-// → 204 No Content   (guardado en Redis: ctx:{E164} con TTL = CONTEXT_TTL_SECONDS)
+// → 200 OK  { "status": "ok", "message": "Contexto guardado" }
 ```
+
+Efecto de una llamada exitosa: **dos escrituras en Redis** (ver §6).
+
+1. `ctx:{E164}` — el contexto en curso, TTL corto (`CONTEXT_TTL_SECONDS`).
+2. `hist:{E164}` — la misma interacción se agrega al historial, TTL largo
+   (`HISTORY_TTL_SECONDS`).
+
+⚠️ **No devolver `204`.** Con body vacío, el tool result le llega al LLM como string vacío y
+le rompe el flujo (commit `75b01d8`).
+
+⚠️ **El historial nunca puede hacer fallar este endpoint.** Está en el camino crítico de la
+transferencia: un `500` acá le devuelve un error al LLM con el paciente en línea. Por eso el
+`pushHistory` va dentro de un `try/catch` que sólo loguea un warning (`src/routes/context.ts`).
 
 ### `GET /crm/contacts/search?phone={{.Phone}}` — "Contact Match Query URL" de Yeastar
 Lo llama Yeastar (Call Popup) cuando la llamada llega al agente. Auth: header personalizado
@@ -212,7 +227,31 @@ incluyendo la URL del panel con token firmado.
 Verifica el token firmado y sirve la página que se abre dentro de Linkus.
 
 ### `GET /api/panel-data?token=...` — datos del panel (JSON)
-Lo consume el front del panel para renderizar el contexto (resumen, intención, fields).
+Lo consume el front del panel para renderizar el contexto y el historial.
+
+```jsonc
+// → 200 OK
+{
+  "caller_number": "+5491155554820",
+  "conversation_id": "conv_abc123",
+  "summary": "...", "intent": "...", "fields": { },
+  "created_at": "2026-07-29T13:22:41.000Z",
+  "history_count": 3,        // interacciones PREVIAS (no incluye la actual)
+  "history": [               // más reciente primero, máximo HISTORY_MAX_ITEMS
+    { "conversation_id": "...", "summary": "...", "intent": "...",
+      "fields": { }, "created_at": "..." }
+  ]
+}
+```
+
+Dos comportamientos que no son obvios:
+
+- **El historial excluye la interacción en curso** para no mostrarla duplicada (ya se
+  renderiza arriba). Por eso `pushHistory` guarda `HISTORY_MAX_ITEMS + 1` elementos: uno se
+  gasta en la actual y quedan 10 previas visibles.
+- **Si no hay contexto en curso, el panel igual sirve.** Puede pasar que el TTL de `ctx:`
+  haya vencido, o que el bot no haya llegado a llamar `guardar_contexto`. En ese caso
+  `summary`/`intent` vienen vacíos pero `history` se devuelve igual.
 
 ### `POST /crm/journal` — (opcional) Call Journal sink
 Yeastar postea el CDR al cerrar la llamada. Sirve para registrar qué agente atendió qué
@@ -232,11 +271,29 @@ Si se activa la asociación de usuarios en Yeastar, devuelve la lista de "usuari
 ## 6. Modelo de datos (Redis)
 
 ```
-ctx:{E164}              -> JSON { conversation_id, summary, intent, fields, created_at }
-                           TTL = CONTEXT_TTL_SECONDS (default 900)
+ctx:{E164}   STRING -> JSON { conversation_id, summary, intent, fields, created_at }
+                       TTL = CONTEXT_TTL_SECONDS (default 900 = 15 min)
+
+hist:{E164}  LIST   -> [ mismo JSON, más reciente primero ]
+                       TTL = HISTORY_TTL_SECONDS (default 7776000 = 90 días)
+                       Largo máximo = HISTORY_MAX_ITEMS + 1
 ```
 
+**Por qué son dos claves y no una.** Cumplen funciones distintas y tienen vidas distintas:
+`ctx:` es un buzón efímero que sólo tiene que sobrevivir la espera en cola; `hist:` es la
+memoria del paciente y tiene que durar meses. Meterlos en la misma clave obligaría a elegir
+un TTL que sirve mal para las dos cosas.
+
+El `hist:` se escribe con un `MULTI` de `LPUSH` + `LTRIM` + `EXPIRE` (`store/redis.ts`), así
+que **el TTL se renueva en cada llamada**: un paciente que llama seguido no pierde su
+historial, y uno que no llama nunca más se limpia solo a los 90 días.
+
 - Clave normalizada a **E.164** (`lib/phone.ts`) para que 11L y Yeastar coincidan.
+- **`getHistory` deduplica por `conversation_id`** y descarta entradas corruptas en silencio:
+  un JSON roto en Redis no puede dejar en blanco el panel durante una llamada.
+- **Durabilidad:** Redis corre con `appendonly yes` (AOF, `appendfsync everysec`). Con sólo
+  snapshots RDB la pérdida en un corte podía ser de hasta 1 hora, aceptable para un cache de
+  15 minutos pero no para un historial de 90 días.
 - Token del panel: HMAC/JWT corto que embebe `{E164 | conversation_id, exp}` — evita que un
   agente abra contextos ajenos. TTL propio (`PANEL_TOKEN_TTL_SECONDS`).
 - (Opcional) `conv:{conversation_id}` para dedup / correlación por sesión.
@@ -251,6 +308,10 @@ PUBLIC_BASE_URL=https://connector.midominio.com
 REDIS_URL=redis://localhost:6379
 
 CONTEXT_TTL_SECONDS=900        # retención = espera máx. de cola (ajustar al cliente)
+
+HISTORY_TTL_SECONDS=7776000    # 90 días; se renueva en cada llamada del paciente
+HISTORY_MAX_ITEMS=10           # interacciones PREVIAS visibles en el panel
+
 INGEST_API_KEY=change-me       # 11L -> POST /api/context
 CRM_API_KEY=change-me          # Yeastar CRM template -> /crm/*
 PANEL_TOKEN_SECRET=change-me   # firma HMAC de tokens del panel
@@ -265,8 +326,12 @@ LOG_LEVEL=info
 
 ```
 voicebot-context-bridge/
-├─ PROJECT.md
+├─ PROJECT.md                  # este doc: fuente de verdad
 ├─ STACK.md                    # versiones y dependencias detalladas
+├─ TRANSFERENCIA-SIP-REFER.md  # diagnóstico del REFER (causa raíz y descartes)
+├─ AGENTE-ELEVENLABS.md        # config del agente: LLM, TTS, ASR, calidad de voz
+├─ backups/                    # snapshots de la config de 11L (⚠️ gitignored: traen secretos)
+├─ .claude/skills/             # skills de Claude Code del proyecto
 ├─ docker-compose.yml          # conector + redis + caddy
 ├─ Caddyfile
 ├─ .env.example
@@ -280,7 +345,7 @@ voicebot-context-bridge/
 │  │  ├─ crm.ts                # GET /crm/contacts/search, POST /crm/journal, /crm/users
 │  │  ├─ panel.ts              # GET /panel, GET /api/panel-data
 │  │  └─ health.ts
-│  ├─ store/redis.ts
+│  ├─ store/redis.ts           # ctx: (contexto) + hist: (historial)
 │  ├─ lib/
 │  │  ├─ tokens.ts             # firmar/verificar tokens del panel
 │  │  └─ phone.ts              # normalización E.164
@@ -392,9 +457,28 @@ Requisitos de plataforma: firmware **83.18.0.102+** y **Enterprise Plan o Ultima
   Diagnóstico completo en **[TRANSFERENCIA-SIP-REFER.md](TRANSFERENCIA-SIP-REFER.md)**.
 
 ### 9.3.1. ElevenLabs — configuración del REFER
-- `transfer_type: sip_refer` + `transfer_destination: {type: "sip_uri", sip_uri: "sip:<destino>@200.41.236.251"}`.
+- `transfer_type: sip_refer` + `transfer_destination: {type: "sip_uri", sip_uri: "sip:<destino>@<host-yeastar>"}`.
 - **No usar `type: "phone"`**: emite `Refer-To: tel:9999` (URI pelado, sin host). Yeastar
   responde 202 + NOTIFY `100 Trying` y nunca rutea. Ver §5 del doc de transferencia.
+
+**El destino es un parámetro de instalación, no una constante del proyecto.** Cambia con
+cada cliente y con cada entorno: puede ser una cola, un ring group, un IVR o un interno
+suelto. Hoy en INEBA está en `sip:9999@200.41.236.251` (el interno de pruebas de Guido).
+
+Para moverlo a otro destino o a otro cliente hay que tocar **dos lugares**, y sólo dos:
+
+| Qué | Dónde |
+|---|---|
+| El destino del REFER | Agente 11L → system tool `transfer_to_number` → `transfer_destination.sip_uri` |
+| La URL del Conector | Yeastar → Integrations → CRM → campo `base_url` del template |
+
+El resto del stack es agnóstico al destino: el Conector nunca ve el número al que se
+transfiere, sólo el del llamante. Lo que **sí** hay que re-verificar en cada instalación es
+que el `sip_uri` apunte al host correcto de esa Yeastar y que el destino exista como
+extensión ruteable — un destino inexistente da `202 Accepted` igual y falla en silencio.
+
+⚠️ Antes de dar por buena una instalación nueva, repasar el **checklist de §9.3**
+(`Qualify Frequency = 25`) — es específico de cada PBX y no viaja con el código.
 
 ### 9.4. Yeastar — Call Flow Designer (alternativa, requiere Ultimate Plan)
 Si el header `X-CALLER-ID` en la troncal no es viable, el componente **HTTP Request**
@@ -435,6 +519,13 @@ llamada, usando `$Session.ani` como número del llamante. La respuesta queda en
 - [x] `GET /api/panel-data?token=` (JSON del contexto)
 - [x] Front del panel: render de resumen, intención, fields, datos del llamante
 - [x] Estado "sin contexto previo" (`src/routes/panel.ts`)
+- [x] **Historial de interacciones previas** (commit `dc64b17`): `hist:{E164}` en Redis,
+      acordeón con las últimas `HISTORY_MAX_ITEMS`, contador, y estado "es la primera vez
+      que llama". Verificado en producción de punta a punta.
+- [x] AOF activado en Redis (`appendonly yes`) — el historial no puede depender de snapshots
+- [x] Rediseño visual del panel (commit `654299a`): jerarquía para lectura rápida durante la
+      llamada. Sin fuentes externas a propósito — el panel se abre mientras suena el teléfono
+      y no puede depender de una descarga.
 
 ### Fase 4 — Telefonía / correlación (VALIDACIÓN CRÍTICA)
 - [x] Troncal Yeastar → 11L (SIP) enviando `X-CALLER-ID`
@@ -443,7 +534,8 @@ llamada, usando `$Session.ani` como número del llamante. La respuesta queda en
 - [x] **Transferencia SIP REFER funcionando de punta a punta** (ver
       [TRANSFERENCIA-SIP-REFER.md](TRANSFERENCIA-SIP-REFER.md)): `sip_uri` en vez de `phone`
       + `Qualify Frequency` 120 → 25
-- [ ] Definir el **destino productivo** (hoy apunta a `9999`, el interno de pruebas)
+- [ ] Definir el **destino** de esta instalación (hoy `9999`, el interno de pruebas).
+      Parámetro por cliente/entorno, no una decisión del código — ver §9.3.1
 - [ ] Ajustar `Get Caller ID From` en Yeastar según lo observado
 - [ ] Si el CLI no sobrevive → implementar plan B (DID único o Call Flow Designer)
 
@@ -470,6 +562,14 @@ llamada, usando `$Session.ani` como número del llamante. La respuesta queda en
   - Devolver contacto con `contact_url` apuntando a un panel "sin contexto" (informativo).
 - **TTL real:** ajustar `CONTEXT_TTL_SECONDS` a la espera máxima de cola del cliente (con
   margen). Parámetro, no valor fijo.
+- **El historial cuenta interacciones *con contexto capturado*, no llamadas totales.** Sólo
+  se escribe cuando el bot llama `guardar_contexto`; si el paciente corta antes de dar sus
+  datos, esa llamada no queda registrada. Es lo razonable (no habría resumen que mostrar),
+  pero conviene decirlo antes de que alguien lea el contador como "cantidad de llamadas".
+  Si se necesita el total real, sale de `POST /crm/journal` (Fase 5), que recibe el CDR.
+- **Datos de salud y retención:** el historial guarda resúmenes de consultas médicas por 90
+  días. Antes de producción real conviene confirmar con INEBA que ese plazo y ese contenido
+  les cierran; `HISTORY_TTL_SECONDS` es un parámetro, se ajusta sin tocar código.
 - **Número por header a 11L:** confirmar en Fase 1 que Yeastar envía y 11L expone el
   `X-CALLER-ID` correctamente. Si no funciona, evaluar Call Flow Designer (§9.4).
 - **UUI como canal de correlación:** el SIP REFER de 11L soporta User-to-User Info
