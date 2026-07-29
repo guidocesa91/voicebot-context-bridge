@@ -331,6 +331,10 @@ voicebot-context-bridge/
 ├─ TRANSFERENCIA-SIP-REFER.md  # diagnóstico del REFER (causa raíz y descartes)
 ├─ AGENTE-ELEVENLABS.md        # config del agente: LLM, TTS, ASR, calidad de voz
 ├─ backups/                    # snapshots de la config de 11L (⚠️ gitignored: traen secretos)
+├─ recursos/                   # material de apoyo, nada que el código importe
+│  ├─ manuales/                #   PDFs de Yeastar (gitignored: 55 MB)
+│  ├─ capturas/                #   pcaps de diagnóstico (gitignored: datos personales)
+│  └─ yeastar/                 #   template Custom CRM importable (versionado)
 ├─ .claude/skills/             # skills de Claude Code del proyecto
 ├─ docker-compose.yml          # conector + redis + caddy
 ├─ Caddyfile
@@ -597,7 +601,8 @@ llamada, usando `$Session.ani` como número del llamante. La respuesta queda en
 3. La **Fase 4** es la única con incertidumbre real (telefonía); el resto es determinístico.
 4. No hardcodear secretos: todo va por `.env` (§7).
 5. Consultar **STACK.md** para versiones exactas de dependencias.
-6. Consultar los PDFs de referencia en la carpeta del proyecto para dudas de Yeastar.
+6. Para dudas de Yeastar, consultar los manuales en `recursos/manuales/` (no están en el
+   repo por tamaño; ver [recursos/README.md](recursos/README.md)).
 7. Para dudas de ElevenLabs, consultar `elevenlabs_referencias.txt` (índice de docs) o
    acceder directamente a las páginas `.md` agregando `.md` a la URL de cualquier página
    de docs (ej. `https://elevenlabs.io/docs/eleven-agents/phone-numbers/sip-trunking.md`).

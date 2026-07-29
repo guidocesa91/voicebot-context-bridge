@@ -38,7 +38,7 @@ Cuando el agente intenta transferir después de ese cierre, **el REFER no llega 
 hay conexión por dónde mandarlo— y ElevenLabs se queda esperando hasta rendirse con el
 timeout de twirp.
 
-### Evidencia (`prueba_nueva.pcap`, 366 s de captura)
+### Evidencia (`recursos/capturas/prueba_nueva.pcap`, 366 s de captura)
 
 ```
  4.58  SYN → 199.88.252.34:5060 (puerto origen 56129)
@@ -101,7 +101,8 @@ OPTIONS en el medio que lo reseteó.
 120  →  25
 ```
 
-Manual de referencia: `p-series-administrator-guide-software-edition-en.pdf`, pág. 839:
+Manual de referencia: `recursos/manuales/p-series-administrator-guide-software-edition-en.pdf`,
+pág. 839:
 
 > **Qualify Frequency (s)** — How often to send SIP OPTIONS packet to SIP device to check if
 > the device is up.
@@ -227,7 +228,7 @@ Corolario del mismo caso: **medir en vez de asumir defaults**. El intervalo de q
 - Herramientas: `guardar_contexto` (webhook) + `transfer_to_number` (system)
 - Destino: `sip:9999@200.41.236.251` — **es el interno de pruebas de Guido**, falta definir el
   productivo (mismo formato `sip:<destino>@200.41.236.251`)
-- Backup del prompt productivo: `elevenlabs_agent_prompt_PROD_backup.json`
+- Backup del prompt productivo: `backups/elevenlabs_agent_prompt_PROD_backup.json`
 
 **Gotcha de la API de ElevenLabs**
 
@@ -271,7 +272,7 @@ o sea, punto 1 o 3.
 
 ## 10. Capturas de referencia
 
-Están en la raíz del proyecto **en local, no en el repo**: llevan números de teléfono
+Están en `recursos/capturas/` **en local, no en el repo**: llevan números de teléfono
 reales, IPs internas y Call-IDs, y el repo es público (ver `.gitignore`). Conviene no
 borrarlas: son la única evidencia de los timings y no se pueden reproducir.
 
@@ -287,16 +288,16 @@ borrarlas: son la única evidencia de los timings y no se pueden reproducir.
 TS="/c/Program Files/Wireshark/tshark.exe"
 
 # ¿Salió algún REFER? (vacío = no salió ninguno)
-"$TS" -r prueba_nueva.pcap -Y 'sip.Method=="REFER"' \
+"$TS" -r recursos/capturas/prueba_nueva.pcap -Y 'sip.Method=="REFER"' \
       -T fields -e frame.time_relative -e ip.src -e ip.dst
 
 # Timeline SIP con ElevenLabs
-"$TS" -r prueba_nueva.pcap -Y "sip && ip.addr==199.88.252.0/24" \
+"$TS" -r recursos/capturas/prueba_nueva.pcap -Y "sip && ip.addr==199.88.252.0/24" \
       -T fields -e frame.time_relative -e ip.src -e ip.dst \
       -e tcp.srcport -e sip.Method -e sip.Status-Code
 
 # SYN / FIN / RST: ver cuándo se abre y se cierra la conexión
-"$TS" -r prueba_nueva.pcap \
+"$TS" -r recursos/capturas/prueba_nueva.pcap \
       -Y "tcp.flags.syn==1 || tcp.flags.fin==1 || tcp.flags.reset==1" \
       -T fields -e frame.time_relative -e ip.src -e ip.dst \
       -e tcp.srcport -e tcp.flags.str | grep 199.88.252
