@@ -100,51 +100,102 @@ function panelHtml(token: string): string {
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Contexto de llamada</title>
 <style>
+  /* Paleta clinica sobria: fondo frio, tinta azul-grisacea, un unico acento teal.
+     Sin fuentes externas a proposito: el panel se abre mientras suena el telefono
+     y no puede depender de una descarga. */
+  :root{
+    --bg:#eef2f6; --surface:#fff; --ink:#0f1f2b; --muted:#5b6b7c;
+    --faint:#93a3b3; --line:#dfe6ed; --accent:#0e7490; --accent-soft:#e0f2f4;
+    --sans:"Segoe UI",system-ui,-apple-system,sans-serif;
+    --mono:ui-monospace,"Cascadia Mono",Consolas,monospace;
+  }
   *{box-sizing:border-box;margin:0;padding:0}
-  body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
-    background:#f5f7fa;color:#1a1a2e;padding:16px;font-size:14px}
-  .card{background:#fff;border-radius:8px;padding:20px;margin-bottom:12px;
-    box-shadow:0 1px 3px rgba(0,0,0,.1)}
-  .card h2{font-size:15px;color:#6c757d;margin-bottom:8px;text-transform:uppercase;
-    letter-spacing:.5px}
-  .card p,.card pre{font-size:14px;line-height:1.5}
-  .intent{display:inline-block;background:#e8f4fd;color:#0277bd;padding:4px 12px;
-    border-radius:12px;font-weight:600;font-size:13px}
-  .field-grid{display:grid;grid-template-columns:auto 1fr;gap:6px 12px}
-  .field-key{font-weight:600;color:#495057}
-  .field-val{color:#212529}
-  .header{display:flex;align-items:center;gap:12px;margin-bottom:16px}
-  .header .phone{font-size:18px;font-weight:700}
-  .header .conv-id{font-size:12px;color:#adb5bd}
-  .meta{font-size:12px;color:#adb5bd;text-align:right}
-  .empty{text-align:center;padding:40px 20px;color:#6c757d}
-  .empty h2{font-size:18px;margin-bottom:8px;color:#495057}
-  .error{text-align:center;padding:40px 20px;color:#c62828}
-  #loading{text-align:center;padding:40px;color:#6c757d}
+  body{font-family:var(--sans);font-size:14px;color:var(--ink);
+    background:var(--bg);
+    background-image:radial-gradient(120% 60% at 50% 0,#fff 0,transparent 70%);
+    padding:20px 16px 32px;-webkit-font-smoothing:antialiased}
+  #app,#loading{max-width:620px;margin:0 auto}
+
+  /* Encabezado: el numero es el dato que se busca de un vistazo. */
+  .header{padding-bottom:14px;margin-bottom:18px;
+    border-bottom:2px solid var(--accent)}
+  .header .phone{font-family:var(--mono);font-size:23px;font-weight:600;
+    letter-spacing:-.02em;font-variant-numeric:tabular-nums}
+  .header .conv-id{font-family:var(--mono);font-size:11px;color:var(--faint);
+    margin-top:3px;word-break:break-all}
+
+  .card{background:var(--surface);border:1px solid var(--line);border-radius:10px;
+    padding:16px 18px;margin-bottom:10px;
+    box-shadow:0 1px 2px rgba(15,31,43,.04)}
+  .card h2{font-size:10.5px;font-weight:700;color:var(--faint);margin-bottom:9px;
+    text-transform:uppercase;letter-spacing:.09em}
+  /* El resumen es lo unico que la recepcionista lee entero: mas grande y aireado. */
+  .card p{font-size:15px;line-height:1.62;color:#1c2c39}
+
+  .intent{display:inline-block;background:var(--accent-soft);color:var(--accent);
+    padding:5px 13px;border-radius:999px;font-weight:600;font-size:13px;
+    box-shadow:inset 0 0 0 1px rgba(14,116,144,.16)}
+
+  .field-grid{display:grid;grid-template-columns:auto 1fr;gap:0 16px;
+    font-size:13.5px}
+  .field-grid>span{padding:7px 0;border-top:1px solid var(--line)}
+  .field-grid>span:nth-child(1),.field-grid>span:nth-child(2){border-top:0;padding-top:0}
+  .field-key{color:var(--muted);text-transform:uppercase;font-size:10.5px;
+    font-weight:700;letter-spacing:.07em;padding-top:9px;white-space:nowrap}
+  .field-val{color:var(--ink)}
+
+  .meta{font-size:11.5px;color:var(--faint);text-align:right;padding:2px 2px 0}
+  .empty{text-align:center;padding:34px 20px}
+  .empty h2{font-size:15px;color:var(--muted);letter-spacing:.04em;margin-bottom:7px}
+  .empty p{font-size:13.5px;color:var(--faint)}
+  .error{text-align:center;padding:44px 20px;color:#b3261e;font-weight:600}
+  #loading{text-align:center;padding:52px;color:var(--faint);
+    animation:pulse 1.4s ease-in-out infinite}
+  @keyframes pulse{50%{opacity:.45}}
+
   /* --- historial de interacciones previas --- */
-  .hist-title{display:flex;align-items:center;gap:8px;margin:20px 0 10px;
-    font-size:13px;color:#6c757d;text-transform:uppercase;letter-spacing:.5px}
-  .badge{background:#0277bd;color:#fff;border-radius:10px;padding:1px 8px;
-    font-size:12px;font-weight:700;letter-spacing:0}
-  .hist-item{background:#fff;border-radius:8px;margin-bottom:8px;
-    box-shadow:0 1px 3px rgba(0,0,0,.1);overflow:hidden}
-  .hist-item summary{padding:12px 14px;cursor:pointer;list-style:none;
-    display:flex;align-items:center;gap:10px;font-size:13px}
+  .hist-title{display:flex;align-items:center;gap:9px;margin:26px 0 10px;
+    font-size:10.5px;font-weight:700;color:var(--muted);
+    text-transform:uppercase;letter-spacing:.09em}
+  .hist-title::after{content:"";flex:1;height:1px;background:var(--line)}
+  .badge{background:var(--accent);color:#fff;border-radius:999px;padding:2px 9px;
+    font-size:11.5px;font-weight:700;letter-spacing:0;
+    font-variant-numeric:tabular-nums}
+  .hist-item{background:var(--surface);border:1px solid var(--line);
+    border-radius:10px;margin-bottom:7px;overflow:hidden;
+    transition:border-color .15s,box-shadow .15s}
+  .hist-item[open]{border-color:#c3d4de;box-shadow:0 2px 8px rgba(15,31,43,.06)}
+  .hist-item summary{padding:12px 15px;cursor:pointer;list-style:none;
+    display:flex;align-items:center;gap:11px;font-size:13px;
+    transition:background .12s}
   .hist-item summary::-webkit-details-marker{display:none}
-  .hist-item summary:hover{background:#f8f9fa}
-  .hist-item summary::before{content:"\\25B8";color:#adb5bd;font-size:11px;
-    transition:transform .15s;flex-shrink:0}
-  .hist-item[open] summary::before{transform:rotate(90deg)}
-  .hist-date{color:#6c757d;flex-shrink:0;font-variant-numeric:tabular-nums}
-  .hist-intent{background:#eef1f4;color:#495057;padding:2px 8px;border-radius:10px;
-    font-size:12px;font-weight:600;white-space:nowrap;overflow:hidden;
-    text-overflow:ellipsis;max-width:55%}
-  .hist-body{padding:0 14px 14px;border-top:1px solid #eef1f4;margin-top:2px}
-  .hist-body h3{font-size:11px;color:#adb5bd;text-transform:uppercase;
-    letter-spacing:.5px;margin:12px 0 4px}
-  .hist-body p{font-size:13px;line-height:1.5}
-  .hist-conv{font-size:11px;color:#ced4da;margin-top:10px;word-break:break-all}
-  .hist-none{color:#adb5bd;font-size:13px;padding:2px 0 8px}
+  .hist-item summary:hover{background:#f6f9fb}
+  .hist-item summary::before{content:"";flex-shrink:0;width:6px;height:6px;
+    border-right:1.5px solid var(--faint);border-bottom:1.5px solid var(--faint);
+    transform:rotate(-45deg);transition:transform .18s ease}
+  .hist-item[open] summary::before{transform:rotate(45deg);
+    border-color:var(--accent)}
+  .hist-date{color:var(--muted);flex-shrink:0;font-family:var(--mono);
+    font-size:12px;font-variant-numeric:tabular-nums}
+  .hist-intent{background:#eef2f6;color:var(--muted);padding:3px 9px;
+    border-radius:999px;font-size:12px;font-weight:600;white-space:nowrap;
+    overflow:hidden;text-overflow:ellipsis;max-width:55%}
+  .hist-body{padding:2px 15px 15px 32px;border-top:1px solid var(--line)}
+  .hist-body h3{font-size:10px;color:var(--faint);text-transform:uppercase;
+    letter-spacing:.09em;font-weight:700;margin:13px 0 5px}
+  .hist-body p{font-size:13.5px;line-height:1.6}
+  .hist-conv{font-family:var(--mono);font-size:10.5px;color:#b8c5d0;
+    margin-top:12px;word-break:break-all}
+  .hist-none{color:var(--faint);font-size:13.5px;padding:4px 0 8px}
+
+  /* Entrada escalonada: da la sensacion de que el panel "llego", no que parpadeo. */
+  #app>*{animation:rise .32s ease-out backwards}
+  #app>*:nth-child(2){animation-delay:.04s}
+  #app>*:nth-child(3){animation-delay:.08s}
+  #app>*:nth-child(n+4){animation-delay:.12s}
+  @keyframes rise{from{opacity:0;transform:translateY(6px)}}
+  @media (prefers-reduced-motion:reduce){*{animation:none!important;
+    transition:none!important}}
 </style>
 </head>
 <body>
