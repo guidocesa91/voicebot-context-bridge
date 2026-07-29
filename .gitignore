@@ -4,6 +4,7 @@ dist/
 .env.local
 *.log
 .DS_Store
+desktop.ini
 
 # Snapshots de la config de ElevenLabs: contienen el INGEST_API_KEY en claro
 # (header Authorization del webhook guardar_contexto). El repo es publico.

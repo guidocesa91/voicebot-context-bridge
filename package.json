@@ -1,5 +1,5 @@
 {
-  "name": "voicebot-context-bridge",
+  "name": "gcs-context-bridge",
   "version": "1.0.0",
   "description": "Conector de contexto entre voicebot ElevenLabs y agentes humanos en Yeastar P-Series",
   "scripts": {

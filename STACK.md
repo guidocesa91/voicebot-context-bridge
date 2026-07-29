@@ -1,4 +1,4 @@
-# Stack Tecnico — Voicebot Context Bridge
+# Stack Tecnico — GCS Context Bridge v1.0
 
 > Documento de referencia con todas las dependencias, versiones minimas,
 > requisitos de plataforma y decisiones tecnicas del proyecto.

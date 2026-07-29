@@ -1,8 +1,15 @@
-# Voicebot Context Bridge
+# GCS Context Bridge <sup style="font-size:.5em">v1.0</sup>
 
 > Traspaso de contexto entre un voicebot (ElevenLabs) y los agentes humanos de un call
 > center sobre Yeastar P-Series. Cuando el bot deriva una llamada, el agente que la atiende
 > recibe automáticamente en su pantalla el resumen de lo que el cliente venía hablando.
+
+> **Nombre y versión:** el proyecto pasa a llamarse **GCS Context Bridge** a partir de la
+> **v1.0** (29/07/2026). El repositorio de GitHub, la carpeta local y las rutas de
+> despliegue en el LXC 101 (`/root/voicebot-context-bridge`) **conservan el nombre
+> original** — renombrarlos es una operación aparte, con su propio riesgo (remotes, scripts
+> de deploy documentados), y no forma parte de este cambio. `package.json` sí quedó
+> actualizado (`"name": "gcs-context-bridge"`) porque no lo referencia nada del build.
 
 Este documento es la **fuente de verdad** del proyecto y está pensado para seguirse desde
 Claude Code. Las fases al final tienen checkboxes: se van marcando a medida que se avanza.
