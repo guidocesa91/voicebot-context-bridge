@@ -66,6 +66,6 @@ export async function contextRoutes(app: FastifyInstance) {
       "Context saved",
     );
 
-    return reply.code(204).send();
+    return reply.code(200).send({ status: "ok", message: "Contexto guardado" });
   });
 }

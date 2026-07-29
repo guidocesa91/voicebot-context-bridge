@@ -82,14 +82,16 @@ describe("POST /api/context", () => {
     expect(res.json().error).toBe("Invalid phone number");
   });
 
-  it("returns 204 on success", async () => {
+  it("returns 200 with a JSON body on success", async () => {
     const res = await app.inject({
       method: "POST",
       url: "/api/context",
       headers: { authorization: "Bearer test-key" },
       payload: validBody,
     });
-    expect(res.statusCode).toBe(204);
+    expect(res.statusCode).toBe(200);
+    // ElevenLabs necesita un cuerpo no vacio: con 204 el tool result llegaba como ""
+    expect(res.json()).toEqual({ status: "ok", message: "Contexto guardado" });
   });
 
   it("normalizes phone number before saving", async () => {
@@ -100,7 +102,7 @@ describe("POST /api/context", () => {
       headers: { authorization: "Bearer test-key" },
       payload: { ...validBody, caller_number: "+54 9 11 5555-4820" },
     });
-    expect(res.statusCode).toBe(204);
+    expect(res.statusCode).toBe(200);
     expect(saveContext).toHaveBeenCalledWith(
       "+5491155554820",
       expect.objectContaining({ caller_number: "+5491155554820" }),
