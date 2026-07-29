@@ -5,7 +5,12 @@ import { parsePhoneNumberFromString } from "libphonenumber-js";
  * Retorna el número normalizado o null si no es válido.
  */
 export function normalizeE164(raw: string): string | null {
-  const phone = parsePhoneNumberFromString(raw);
+  // Intentar parsear tal cual (con código de país)
+  let phone = parsePhoneNumberFromString(raw);
+  // Si no tiene código de país, asumir Argentina
+  if (!phone || !phone.isValid()) {
+    phone = parsePhoneNumberFromString(raw, "AR");
+  }
   if (!phone || !phone.isValid()) return null;
   return phone.number; // E.164: "+5491155554820"
 }
