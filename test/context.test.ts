@@ -5,6 +5,7 @@ import { contextRoutes } from "../src/routes/context.js";
 // Mock Redis
 vi.mock("../src/store/redis.js", () => {
   const store = new Map<string, string>();
+  const history = new Map<string, string[]>();
   return {
     redis: { quit: vi.fn() },
     saveContext: vi.fn(async (e164: string, ctx: unknown) => {
@@ -14,6 +15,14 @@ vi.mock("../src/store/redis.js", () => {
       const raw = store.get(`ctx:${e164}`);
       return raw ? JSON.parse(raw) : null;
     }),
+    pushHistory: vi.fn(async (e164: string, ctx: unknown) => {
+      const list = history.get(`hist:${e164}`) ?? [];
+      list.unshift(JSON.stringify(ctx));
+      history.set(`hist:${e164}`, list);
+    }),
+    getHistory: vi.fn(async (e164: string) =>
+      (history.get(`hist:${e164}`) ?? []).map((s) => JSON.parse(s)),
+    ),
   };
 });
 
@@ -22,6 +31,8 @@ vi.mock("../src/config.js", () => ({
   config: {
     ingestApiKey: "test-key",
     contextTtlSeconds: 900,
+    historyTtlSeconds: 7776000,
+    historyMaxItems: 10,
   },
 }));
 
@@ -91,6 +102,36 @@ describe("POST /api/context", () => {
     });
     expect(res.statusCode).toBe(200);
     // ElevenLabs necesita un cuerpo no vacio: con 204 el tool result llegaba como ""
+    expect(res.json()).toEqual({ status: "ok", message: "Contexto guardado" });
+  });
+
+  it("agrega la interaccion al historial", async () => {
+    const { pushHistory } = await import("../src/store/redis.js");
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/context",
+      headers: { authorization: "Bearer test-key" },
+      payload: { ...validBody, conversation_id: "conv_hist_1" },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(pushHistory).toHaveBeenCalledWith(
+      "+5491155554820",
+      expect.objectContaining({ conversation_id: "conv_hist_1" }),
+    );
+  });
+
+  it("sigue respondiendo 200 aunque falle el historial", async () => {
+    // El endpoint esta en el camino critico de la transferencia: un fallo al
+    // guardar el historial no puede devolverle un error al LLM.
+    const { pushHistory } = await import("../src/store/redis.js");
+    vi.mocked(pushHistory).mockRejectedValueOnce(new Error("redis caido"));
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/context",
+      headers: { authorization: "Bearer test-key" },
+      payload: { ...validBody, conversation_id: "conv_hist_fail" },
+    });
+    expect(res.statusCode).toBe(200);
     expect(res.json()).toEqual({ status: "ok", message: "Contexto guardado" });
   });
 

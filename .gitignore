@@ -4,3 +4,17 @@ dist/
 .env.local
 *.log
 .DS_Store
+
+# Snapshots de la config de ElevenLabs: contienen el INGEST_API_KEY en claro
+# (header Authorization del webhook guardar_contexto). El repo es publico.
+backups/*.json
+!backups/README.md
+
+# Capturas SIP: llevan numeros de telefono reales, IPs internas y Call-IDs.
+# Se conservan localmente como evidencia, pero no van a un repo publico.
+*.pcap
+*.pcapng
+
+# Manuales del fabricante: 51 MB + 3.5 MB, se descargan del sitio de Yeastar.
+p-series-administrator-guide-software-edition-en.pdf
+custom-crm-integration-guide-p-series-software-edition-en.pdf

@@ -21,3 +21,11 @@ export function normalizeE164(raw: string): string | null {
 export function contextKey(e164: string): string {
   return `ctx:${e164}`;
 }
+
+/**
+ * Genera la clave Redis del historial de interacciones para un número E.164.
+ * Es una lista: el elemento 0 es la interacción más reciente.
+ */
+export function historyKey(e164: string): string {
+  return `hist:${e164}`;
+}

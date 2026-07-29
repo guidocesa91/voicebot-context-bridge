@@ -1,7 +1,28 @@
 import type { FastifyInstance } from "fastify";
+import { config } from "../config.js";
 import { verifyPanelToken } from "../lib/tokens.js";
-import { getContext } from "../store/redis.js";
-import type { PanelData } from "../types.js";
+import { getContext, getHistory } from "../store/redis.js";
+import type { HistoryEntry, PanelData, StoredContext } from "../types.js";
+
+/**
+ * Arma el historial visible: saca la interacción en curso (ya se muestra arriba)
+ * y recorta a `historyMaxItems`.
+ */
+function buildHistory(
+  all: StoredContext[],
+  currentConversationId: string,
+): HistoryEntry[] {
+  return all
+    .filter((c) => c.conversation_id !== currentConversationId)
+    .slice(0, config.historyMaxItems)
+    .map((c) => ({
+      conversation_id: c.conversation_id,
+      summary: c.summary,
+      intent: c.intent,
+      fields: c.fields,
+      created_at: c.created_at,
+    }));
+}
 
 export async function panelRoutes(app: FastifyInstance) {
   // JSON endpoint — consumed by the panel front-end
@@ -16,8 +37,14 @@ export async function panelRoutes(app: FastifyInstance) {
       return reply.code(401).send({ error: "Invalid or expired token" });
     }
 
-    const context = await getContext(claims.phone);
+    const [context, allHistory] = await Promise.all([
+      getContext(claims.phone),
+      getHistory(claims.phone),
+    ]);
+
+    // Sin contexto en curso el panel igual sirve: puede haber interacciones previas.
     if (!context) {
+      const history = buildHistory(allHistory, claims.conversation_id);
       const empty: PanelData = {
         caller_number: claims.phone,
         conversation_id: claims.conversation_id,
@@ -25,10 +52,13 @@ export async function panelRoutes(app: FastifyInstance) {
         intent: "",
         fields: {},
         created_at: "",
+        history,
+        history_count: history.length,
       };
       return reply.send(empty);
     }
 
+    const history = buildHistory(allHistory, context.conversation_id);
     const data: PanelData = {
       caller_number: context.caller_number,
       conversation_id: context.conversation_id,
@@ -36,6 +66,8 @@ export async function panelRoutes(app: FastifyInstance) {
       intent: context.intent,
       fields: context.fields,
       created_at: context.created_at,
+      history,
+      history_count: history.length,
     };
 
     return reply.send(data);
@@ -89,6 +121,30 @@ function panelHtml(token: string): string {
   .empty h2{font-size:18px;margin-bottom:8px;color:#495057}
   .error{text-align:center;padding:40px 20px;color:#c62828}
   #loading{text-align:center;padding:40px;color:#6c757d}
+  /* --- historial de interacciones previas --- */
+  .hist-title{display:flex;align-items:center;gap:8px;margin:20px 0 10px;
+    font-size:13px;color:#6c757d;text-transform:uppercase;letter-spacing:.5px}
+  .badge{background:#0277bd;color:#fff;border-radius:10px;padding:1px 8px;
+    font-size:12px;font-weight:700;letter-spacing:0}
+  .hist-item{background:#fff;border-radius:8px;margin-bottom:8px;
+    box-shadow:0 1px 3px rgba(0,0,0,.1);overflow:hidden}
+  .hist-item summary{padding:12px 14px;cursor:pointer;list-style:none;
+    display:flex;align-items:center;gap:10px;font-size:13px}
+  .hist-item summary::-webkit-details-marker{display:none}
+  .hist-item summary:hover{background:#f8f9fa}
+  .hist-item summary::before{content:"\\25B8";color:#adb5bd;font-size:11px;
+    transition:transform .15s;flex-shrink:0}
+  .hist-item[open] summary::before{transform:rotate(90deg)}
+  .hist-date{color:#6c757d;flex-shrink:0;font-variant-numeric:tabular-nums}
+  .hist-intent{background:#eef1f4;color:#495057;padding:2px 8px;border-radius:10px;
+    font-size:12px;font-weight:600;white-space:nowrap;overflow:hidden;
+    text-overflow:ellipsis;max-width:55%}
+  .hist-body{padding:0 14px 14px;border-top:1px solid #eef1f4;margin-top:2px}
+  .hist-body h3{font-size:11px;color:#adb5bd;text-transform:uppercase;
+    letter-spacing:.5px;margin:12px 0 4px}
+  .hist-body p{font-size:13px;line-height:1.5}
+  .hist-conv{font-size:11px;color:#ced4da;margin-top:10px;word-break:break-all}
+  .hist-none{color:#adb5bd;font-size:13px;padding:2px 0 8px}
 </style>
 </head>
 <body>
@@ -107,20 +163,16 @@ function panelHtml(token: string): string {
       return;
     }
     const d=await r.json();
-    if(!d.summary){
-      app.innerHTML=\`<div class="empty">
-        <h2>Sin contexto previo</h2>
-        <p>No hay información del voicebot para esta llamada.</p>
-        <p style="margin-top:8px">Número: \${esc(d.caller_number)}</p>
-      </div>\`;
-      return;
-    }
-    const fields=d.fields&&Object.keys(d.fields).length
-      ? Object.entries(d.fields).map(([k,v])=>
-          '<span class="field-key">'+esc(k)+'</span><span class="field-val">'+esc(String(v))+'</span>'
-        ).join("")
-      : '<span class="field-val" style="grid-column:span 2">—</span>';
-    const ts=d.created_at?new Date(d.created_at).toLocaleString("es-AR"):"—";
+    const hist=Array.isArray(d.history)?d.history:[];
+    const current=d.summary
+      ? \`<div class="card"><h2>Intención</h2><span class="intent">\${esc(d.intent)}</span></div>
+         <div class="card"><h2>Resumen</h2><p>\${esc(d.summary)}</p></div>
+         <div class="card"><h2>Datos capturados</h2><div class="field-grid">\${fieldsHtml(d.fields)}</div></div>
+         <div class="meta">Contexto creado: \${fmt(d.created_at)}</div>\`
+      : \`<div class="card empty">
+           <h2>Sin contexto previo</h2>
+           <p>No hay información del voicebot para esta llamada.</p>
+         </div>\`;
     app.innerHTML=\`
       <div class="header">
         <div>
@@ -128,10 +180,11 @@ function panelHtml(token: string): string {
           <div class="conv-id">\${esc(d.conversation_id)}</div>
         </div>
       </div>
-      <div class="card"><h2>Intención</h2><span class="intent">\${esc(d.intent)}</span></div>
-      <div class="card"><h2>Resumen</h2><p>\${esc(d.summary)}</p></div>
-      <div class="card"><h2>Datos capturados</h2><div class="field-grid">\${fields}</div></div>
-      <div class="meta">Contexto creado: \${ts}</div>
+      \${current}
+      <div class="hist-title">
+        Interacciones previas <span class="badge">\${hist.length}</span>
+      </div>
+      \${hist.length?hist.map(histHtml).join(""):'<div class="hist-none">Es la primera vez que llama.</div>'}
     \`;
   }catch(e){
     loading.style.display="none";
@@ -140,6 +193,35 @@ function panelHtml(token: string): string {
   }
 })();
 function esc(s){const d=document.createElement("div");d.textContent=s;return d.innerHTML}
+function fmt(iso){
+  if(!iso)return "—";
+  const dt=new Date(iso);
+  return isNaN(dt)?"—":dt.toLocaleString("es-AR",
+    {day:"2-digit",month:"2-digit",year:"2-digit",hour:"2-digit",minute:"2-digit"});
+}
+function fieldsHtml(f){
+  if(!f||!Object.keys(f).length)
+    return '<span class="field-val" style="grid-column:span 2">—</span>';
+  return Object.entries(f).map(([k,v])=>
+    '<span class="field-key">'+esc(k)+'</span>'+
+    '<span class="field-val">'+esc(typeof v==="object"&&v!==null?JSON.stringify(v):String(v))+'</span>'
+  ).join("");
+}
+function histHtml(h){
+  return \`<details class="hist-item">
+    <summary>
+      <span class="hist-date">\${fmt(h.created_at)}</span>
+      <span class="hist-intent">\${esc(h.intent||"sin intención")}</span>
+    </summary>
+    <div class="hist-body">
+      <h3>Resumen</h3>
+      <p>\${esc(h.summary||"—")}</p>
+      <h3>Datos capturados</h3>
+      <div class="field-grid">\${fieldsHtml(h.fields)}</div>
+      <div class="hist-conv">\${esc(h.conversation_id||"")}</div>
+    </div>
+  </details>\`;
+}
 </script>
 </body>
 </html>`;

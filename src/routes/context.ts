@@ -2,7 +2,7 @@ import type { FastifyInstance, FastifyRequest, FastifyReply } from "fastify";
 import { z } from "zod/v4";
 import { config } from "../config.js";
 import { normalizeE164 } from "../lib/phone.js";
-import { saveContext } from "../store/redis.js";
+import { saveContext, pushHistory } from "../store/redis.js";
 import type { StoredContext } from "../types.js";
 
 const contextBodySchema = z.object({
@@ -60,6 +60,18 @@ export async function contextRoutes(app: FastifyInstance) {
     };
 
     await saveContext(e164, context);
+
+    // El historial es secundario: si falla, la llamada tiene que seguir igual.
+    // Este endpoint esta en el camino critico de la transferencia — un 500 aca
+    // le devuelve un error al LLM y le rompe el flujo al paciente.
+    try {
+      await pushHistory(e164, context);
+    } catch (err) {
+      request.log.warn(
+        { err, e164, conversation_id },
+        "Could not append to history",
+      );
+    }
 
     request.log.info(
       { e164, conversation_id, intent },
