@@ -30,6 +30,32 @@ export interface HistoryEntry {
   created_at: string;
 }
 
+/** Taxonomia cerrada de tipificacion de llamadas. */
+export type TipoLlamada =
+  | "turno"
+  | "consulta_general"
+  | "reclamo"
+  | "desvio_area"
+  | "otro";
+
+/** Body que manda el panel al tipificar una llamada. */
+export interface TipificacionInput {
+  tipo: TipoLlamada;
+  cantidad_turnos?: number;
+  especialidad?: string;
+  observacion?: string;
+}
+
+/** Registro durable de una llamada ya tipificada (tabla `llamadas` en SQLite). */
+export interface LlamadaRecord extends TipificacionInput {
+  id?: number;
+  caller_number: string;
+  conversation_id: string | null;
+  summary: string | null;
+  intent: string | null;
+  created_at: string;
+}
+
 export interface PanelData {
   caller_number: string;
   conversation_id: string;

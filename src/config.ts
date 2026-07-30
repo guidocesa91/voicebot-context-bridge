@@ -19,4 +19,17 @@ export const config = {
     10,
   ),
   logLevel: process.env.LOG_LEVEL ?? "info",
+
+  // Registro durable de llamadas (tipificacion), separado de Redis.
+  sqlitePath: process.env.SQLITE_PATH ?? "./data/llamadas.db",
+  callRetentionDays: parseInt(process.env.CALL_RETENTION_DAYS ?? "90", 10),
+
+  // Login del supervisor (una sola cuenta).
+  supervisorUsername: process.env.SUPERVISOR_USERNAME ?? "",
+  supervisorPasswordHash: process.env.SUPERVISOR_PASSWORD_HASH ?? "",
+  supervisorTokenSecret: process.env.SUPERVISOR_TOKEN_SECRET ?? "",
+  supervisorTokenTtlSeconds: parseInt(
+    process.env.SUPERVISOR_TOKEN_TTL_SECONDS ?? "28800",
+    10,
+  ),
 } as const;

@@ -188,6 +188,26 @@ function panelHtml(token: string): string {
     margin-top:12px;word-break:break-all}
   .hist-none{color:var(--faint);font-size:13.5px;padding:4px 0 8px}
 
+  /* --- tipificacion --- */
+  .tip-card{margin-top:26px}
+  .tip-row{display:flex;flex-direction:column;gap:5px;margin-bottom:12px}
+  .tip-row label{font-size:10.5px;font-weight:700;color:var(--muted);
+    text-transform:uppercase;letter-spacing:.07em}
+  .tip-row select,.tip-row input{font:inherit;font-size:13.5px;color:var(--ink);
+    background:var(--bg);border:1px solid var(--line);border-radius:8px;
+    padding:9px 11px;width:100%}
+  .tip-row select:focus,.tip-row input:focus{outline:2px solid var(--accent-soft);
+    border-color:var(--accent)}
+  .tip-two{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  .tip-save{width:100%;background:var(--accent);color:#fff;border:none;
+    border-radius:9px;padding:12px;font:inherit;font-size:14px;font-weight:700;
+    cursor:pointer;transition:opacity .15s}
+  .tip-save:hover{opacity:.92}
+  .tip-save:disabled{opacity:.55;cursor:default}
+  .tip-msg{font-size:12.5px;text-align:center;margin-top:9px;min-height:16px}
+  .tip-msg.error{color:#b3261e}
+  .tip-msg.ok{color:var(--accent)}
+
   /* Entrada escalonada: da la sensacion de que el panel "llego", no que parpadeo. */
   #app>*{animation:rise .32s ease-out backwards}
   #app>*:nth-child(2){animation-delay:.04s}
@@ -236,7 +256,37 @@ function panelHtml(token: string): string {
         Interacciones previas <span class="badge">\${hist.length}</span>
       </div>
       \${hist.length?hist.map(histHtml).join(""):'<div class="hist-none">Es la primera vez que llama.</div>'}
+      <div class="card tip-card">
+        <h2>Tipificar llamada</h2>
+        <div class="tip-row">
+          <label for="tipTipo">Tipo</label>
+          <select id="tipTipo">
+            <option value="turno">Turno</option>
+            <option value="consulta_general">Consulta general (información)</option>
+            <option value="reclamo">Reclamo</option>
+            <option value="desvio_area">Desvío a otro área</option>
+            <option value="otro">Otro</option>
+          </select>
+        </div>
+        <div id="tipTurnoFields" class="tip-two">
+          <div class="tip-row">
+            <label for="tipCantidad">Cantidad de turnos</label>
+            <input id="tipCantidad" type="number" min="1" max="20" value="1">
+          </div>
+          <div class="tip-row">
+            <label for="tipEspecialidad">Especialidad</label>
+            <input id="tipEspecialidad" type="text" maxlength="80" placeholder="ej. Cardiología">
+          </div>
+        </div>
+        <div class="tip-row">
+          <label for="tipObs">Observación (opcional, breve)</label>
+          <input id="tipObs" type="text" maxlength="140" placeholder="máx. 140 caracteres">
+        </div>
+        <button id="tipGuardar" class="tip-save" type="button">Guardar y cerrar</button>
+        <div id="tipMsg" class="tip-msg"></div>
+      </div>
     \`;
+    wireTipificacion("${token}");
   }catch(e){
     loading.style.display="none";
     app.style.display="block";
@@ -272,6 +322,48 @@ function histHtml(h){
       <div class="hist-conv">\${esc(h.conversation_id||"")}</div>
     </div>
   </details>\`;
+}
+function wireTipificacion(token){
+  const tipoSel=document.getElementById("tipTipo");
+  const turnoFields=document.getElementById("tipTurnoFields");
+  const btn=document.getElementById("tipGuardar");
+  const msg=document.getElementById("tipMsg");
+  function syncTurno(){turnoFields.style.display=tipoSel.value==="turno"?"grid":"none"}
+  tipoSel.addEventListener("change",syncTurno);
+  syncTurno();
+  btn.addEventListener("click",async()=>{
+    msg.textContent="";msg.className="tip-msg";
+    btn.disabled=true;
+    const body={token,tipo:tipoSel.value};
+    if(tipoSel.value==="turno"){
+      body.cantidad_turnos=parseInt(document.getElementById("tipCantidad").value,10)||1;
+      const esp=document.getElementById("tipEspecialidad").value.trim();
+      if(esp)body.especialidad=esp;
+    }
+    const obs=document.getElementById("tipObs").value.trim();
+    if(obs)body.observacion=obs;
+    try{
+      const r=await fetch("/api/panel/tipificar",{
+        method:"POST",
+        headers:{"Content-Type":"application/json"},
+        body:JSON.stringify(body),
+      });
+      if(!r.ok){
+        const data=await r.json().catch(()=>({}));
+        msg.textContent=data.error||("Error al guardar ("+r.status+")");
+        msg.className="tip-msg error";
+        btn.disabled=false;
+        return;
+      }
+      msg.textContent="Guardado. Cerrando…";
+      msg.className="tip-msg ok";
+      setTimeout(()=>window.close(),400);
+    }catch(e){
+      msg.textContent="Error de conexión";
+      msg.className="tip-msg error";
+      btn.disabled=false;
+    }
+  });
 }
 </script>
 </body>

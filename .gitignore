@@ -6,6 +6,10 @@ dist/
 .DS_Store
 desktop.ini
 
+# Registro durable de llamadas (SQLite): numeros reales de pacientes, no va a un repo publico.
+data/
+*.db
+
 # Snapshots de la config de ElevenLabs: contienen el INGEST_API_KEY en claro
 # (header Authorization del webhook guardar_contexto). El repo es publico.
 backups/*.json
