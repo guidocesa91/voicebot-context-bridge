@@ -114,7 +114,18 @@ function panelHtml(token: string): string {
     background:var(--bg);
     background-image:radial-gradient(120% 60% at 50% 0,#fff 0,transparent 70%);
     padding:20px 16px 32px;-webkit-font-smoothing:antialiased}
-  #app,#loading{max-width:620px;margin:0 auto}
+  #loading{max-width:620px;margin:0 auto}
+  #app{max-width:1080px;margin:0 auto}
+
+  /* Dos columnas: contexto+historial a la izquierda, tipificacion a la
+     derecha, siempre a mano sin tener que bajar. En ventanas angostas
+     colapsa a una sola columna apilada. */
+  .layout{display:grid;grid-template-columns:1fr 360px;gap:0 28px;align-items:start}
+  .col-right{position:sticky;top:20px}
+  @media (max-width:860px){
+    .layout{display:block}
+    .col-right{position:static;margin-top:26px}
+  }
 
   /* Encabezado: el numero es el dato que se busca de un vistazo. */
   .header{padding-bottom:14px;margin-bottom:18px;
@@ -189,7 +200,6 @@ function panelHtml(token: string): string {
   .hist-none{color:var(--faint);font-size:13.5px;padding:4px 0 8px}
 
   /* --- tipificacion --- */
-  .tip-card{margin-top:26px}
   .tip-row{display:flex;flex-direction:column;gap:5px;margin-bottom:12px}
   .tip-row label{font-size:10.5px;font-weight:700;color:var(--muted);
     text-transform:uppercase;letter-spacing:.07em}
@@ -209,10 +219,11 @@ function panelHtml(token: string): string {
   .tip-msg.ok{color:var(--accent)}
 
   /* Entrada escalonada: da la sensacion de que el panel "llego", no que parpadeo. */
-  #app>*{animation:rise .32s ease-out backwards}
-  #app>*:nth-child(2){animation-delay:.04s}
-  #app>*:nth-child(3){animation-delay:.08s}
-  #app>*:nth-child(n+4){animation-delay:.12s}
+  .col-left>*{animation:rise .32s ease-out backwards}
+  .col-left>*:nth-child(2){animation-delay:.04s}
+  .col-left>*:nth-child(3){animation-delay:.08s}
+  .col-left>*:nth-child(n+4){animation-delay:.12s}
+  .col-right{animation:rise .32s ease-out backwards;animation-delay:.06s}
   @keyframes rise{from{opacity:0;transform:translateY(6px)}}
   @media (prefers-reduced-motion:reduce){*{animation:none!important;
     transition:none!important}}
@@ -245,45 +256,51 @@ function panelHtml(token: string): string {
            <p>No hay información del voicebot para esta llamada.</p>
          </div>\`;
     app.innerHTML=\`
-      <div class="header">
-        <div>
-          <div class="phone">\${esc(d.caller_number)}</div>
-          <div class="conv-id">\${esc(d.conversation_id)}</div>
-        </div>
-      </div>
-      \${current}
-      <div class="hist-title">
-        Interacciones previas <span class="badge">\${hist.length}</span>
-      </div>
-      \${hist.length?hist.map(histHtml).join(""):'<div class="hist-none">Es la primera vez que llama.</div>'}
-      <div class="card tip-card">
-        <h2>Tipificar llamada</h2>
-        <div class="tip-row">
-          <label for="tipTipo">Tipo</label>
-          <select id="tipTipo">
-            <option value="turno">Turno</option>
-            <option value="consulta_general">Consulta general (información)</option>
-            <option value="reclamo">Reclamo</option>
-            <option value="desvio_area">Desvío a otro área</option>
-            <option value="otro">Otro</option>
-          </select>
-        </div>
-        <div id="tipTurnoFields" class="tip-two">
-          <div class="tip-row">
-            <label for="tipCantidad">Cantidad de turnos</label>
-            <input id="tipCantidad" type="number" min="1" max="20" value="1">
+      <div class="layout">
+        <div class="col-left">
+          <div class="header">
+            <div>
+              <div class="phone">\${esc(d.caller_number)}</div>
+              <div class="conv-id">\${esc(d.conversation_id)}</div>
+            </div>
           </div>
-          <div class="tip-row">
-            <label for="tipEspecialidad">Especialidad</label>
-            <input id="tipEspecialidad" type="text" maxlength="80" placeholder="ej. Cardiología">
+          \${current}
+          <div class="hist-title">
+            Interacciones previas <span class="badge">\${hist.length}</span>
+          </div>
+          \${hist.length?hist.map(histHtml).join(""):'<div class="hist-none">Es la primera vez que llama.</div>'}
+        </div>
+        <div class="col-right">
+          <div class="card tip-card">
+            <h2>Tipificar llamada</h2>
+            <div class="tip-row">
+              <label for="tipTipo">Tipo</label>
+              <select id="tipTipo">
+                <option value="turno">Turno</option>
+                <option value="consulta_general">Consulta general (información)</option>
+                <option value="reclamo">Reclamo</option>
+                <option value="desvio_area">Desvío a otro área</option>
+                <option value="otro">Otro</option>
+              </select>
+            </div>
+            <div id="tipTurnoFields" class="tip-two">
+              <div class="tip-row">
+                <label for="tipCantidad">Cantidad de turnos</label>
+                <input id="tipCantidad" type="number" min="1" max="20" value="1">
+              </div>
+              <div class="tip-row">
+                <label for="tipEspecialidad">Especialidad</label>
+                <input id="tipEspecialidad" type="text" maxlength="80" placeholder="ej. Cardiología">
+              </div>
+            </div>
+            <div class="tip-row">
+              <label for="tipObs">Observación (opcional, breve)</label>
+              <input id="tipObs" type="text" maxlength="140" placeholder="máx. 140 caracteres">
+            </div>
+            <button id="tipGuardar" class="tip-save" type="button">Guardar y cerrar</button>
+            <div id="tipMsg" class="tip-msg"></div>
           </div>
         </div>
-        <div class="tip-row">
-          <label for="tipObs">Observación (opcional, breve)</label>
-          <input id="tipObs" type="text" maxlength="140" placeholder="máx. 140 caracteres">
-        </div>
-        <button id="tipGuardar" class="tip-save" type="button">Guardar y cerrar</button>
-        <div id="tipMsg" class="tip-msg"></div>
       </div>
     \`;
     wireTipificacion("${token}");
