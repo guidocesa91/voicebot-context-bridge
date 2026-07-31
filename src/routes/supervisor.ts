@@ -40,10 +40,41 @@ function csvEscape(v: unknown): string {
 
 const TIPO_LABEL: Record<string, string> = {
   turno: "Turno",
-  consulta_general: "Consulta general",
-  reclamo: "Reclamo",
-  desvio_area: "Desvío a otro área",
-  otro: "Otro",
+  no_turno: "No turno",
+  cancelado: "Cancelado",
+};
+
+const SUBTIPO_LABEL: Record<string, string> = {
+  // turno
+  reso: "RESO",
+  tomo: "TOMO",
+  eco_doppler: "ECO/Doppler",
+  eeg: "EEG",
+  emg: "EMG",
+  consultorio_especialidad: "Consultorio/Especialidad",
+  chequeo_cmi_apto: "Chequeo/CMI/Apto",
+  unr: "UNR",
+  cognitiva: "Cognitiva",
+  hospital_dia_cognitiva: "Hospital de día/Cognitiva",
+  hospital_dia_psiquiatrico: "Hospital de día/Psiquiátrico",
+  gedyt: "GEDYT",
+  psoriahue: "Psoriahue",
+  // no_turno
+  precio: "Precio",
+  cobertura: "Cobertura",
+  prestacion: "Prestación",
+  sin_agenda: "Sin agenda",
+  whatsapp: "Se continúa por WhatsApp",
+  info_imagenes: "Info/email imágenes",
+  info_consultorios_externos: "Info/email consultorios externos",
+  info_4to_piso: "Info 4to piso",
+  orden_vencida: "Orden vencida",
+  email_supervision: "Email supervisión",
+  fecha_turno: "Fecha de turno",
+  call_cortada: "Se cortó la llamada",
+  no_portal: "No puede ingresar al portal",
+  receta_orden_resultado: "Receta/orden/resultado",
+  lab_rx_demanda: "Lab/RX demanda espontánea",
 };
 
 function toCsv(rows: LlamadaRecord[]): string {
@@ -52,6 +83,9 @@ function toCsv(rows: LlamadaRecord[]): string {
     "numero",
     "conversation_id",
     "tipo",
+    "subtipo",
+    "particular",
+    "reprogramado",
     "cantidad_turnos",
     "especialidad",
     "observacion",
@@ -66,6 +100,9 @@ function toCsv(rows: LlamadaRecord[]): string {
         r.caller_number,
         r.conversation_id,
         TIPO_LABEL[r.tipo] ?? r.tipo,
+        r.subtipo ? (SUBTIPO_LABEL[r.subtipo] ?? r.subtipo) : "",
+        r.particular ? "Sí" : "",
+        r.reprogramado ? "Sí" : "",
         r.cantidad_turnos,
         r.especialidad,
         r.observacion,

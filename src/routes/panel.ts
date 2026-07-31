@@ -209,6 +209,9 @@ function panelHtml(token: string): string {
   .tip-row select:focus,.tip-row input:focus{outline:2px solid var(--accent-soft);
     border-color:var(--accent)}
   .tip-two{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  .tip-check{display:flex;align-items:center;gap:7px;font-size:12.5px;
+    color:var(--muted);cursor:pointer}
+  .tip-check input{width:auto}
   .tip-save{width:100%;background:var(--accent);color:#fff;border:none;
     border-radius:9px;padding:12px;font:inherit;font-size:14px;font-weight:700;
     cursor:pointer;transition:opacity .15s}
@@ -277,11 +280,17 @@ function panelHtml(token: string): string {
               <label for="tipTipo">Tipo</label>
               <select id="tipTipo">
                 <option value="turno">Turno</option>
-                <option value="consulta_general">Consulta general (información)</option>
-                <option value="reclamo">Reclamo</option>
-                <option value="desvio_area">Desvío a otro área</option>
-                <option value="otro">Otro</option>
+                <option value="no_turno">No turno</option>
+                <option value="cancelado">Cancelado</option>
               </select>
+            </div>
+            <div id="tipSubtipoRow" class="tip-row">
+              <label for="tipSubtipo">Subtipo</label>
+              <select id="tipSubtipo"></select>
+            </div>
+            <div id="tipTurnoFlags" class="tip-two">
+              <label class="tip-check"><input type="checkbox" id="tipParticular"> Particular</label>
+              <label class="tip-check"><input type="checkbox" id="tipReprogramado"> Reprogramado</label>
             </div>
             <div id="tipTurnoFields" class="tip-two">
               <div class="tip-row">
@@ -340,19 +349,53 @@ function histHtml(h){
     </div>
   </details>\`;
 }
+const SUBTIPOS_TURNO=[
+  ["reso","RESO"],["tomo","TOMO"],["eco_doppler","ECO/Doppler"],["eeg","EEG"],
+  ["emg","EMG"],["consultorio_especialidad","Consultorio/Especialidad"],
+  ["chequeo_cmi_apto","Chequeo/CMI/Apto"],["unr","UNR"],["cognitiva","Cognitiva"],
+  ["hospital_dia_cognitiva","Hospital de día/Cognitiva"],
+  ["hospital_dia_psiquiatrico","Hospital de día/Psiquiátrico"],
+  ["gedyt","GEDYT"],["psoriahue","Psoriahue"],
+];
+const SUBTIPOS_NO_TURNO=[
+  ["precio","Precio"],["cobertura","Cobertura"],["prestacion","Prestación"],
+  ["sin_agenda","Sin agenda"],["whatsapp","Se continúa por WhatsApp"],
+  ["info_imagenes","Info/email imágenes"],
+  ["info_consultorios_externos","Info/email consultorios externos"],
+  ["info_4to_piso","Info 4to piso"],["orden_vencida","Orden vencida"],
+  ["email_supervision","Email supervisión"],["fecha_turno","Fecha de turno"],
+  ["call_cortada","Se cortó la llamada"],["no_portal","No puede ingresar al portal"],
+  ["receta_orden_resultado","Receta/orden/resultado"],
+  ["lab_rx_demanda","Lab/RX demanda espontánea"],
+];
 function wireTipificacion(token){
   const tipoSel=document.getElementById("tipTipo");
+  const subtipoRow=document.getElementById("tipSubtipoRow");
+  const subtipoSel=document.getElementById("tipSubtipo");
+  const turnoFlags=document.getElementById("tipTurnoFlags");
   const turnoFields=document.getElementById("tipTurnoFields");
   const btn=document.getElementById("tipGuardar");
   const msg=document.getElementById("tipMsg");
-  function syncTurno(){turnoFields.style.display=tipoSel.value==="turno"?"grid":"none"}
-  tipoSel.addEventListener("change",syncTurno);
-  syncTurno();
+  function syncTipo(){
+    const tipo=tipoSel.value;
+    const isTurno=tipo==="turno";
+    turnoFlags.style.display=isTurno?"grid":"none";
+    turnoFields.style.display=isTurno?"grid":"none";
+    subtipoRow.style.display=tipo==="cancelado"?"none":"flex";
+    const opts=isTurno?SUBTIPOS_TURNO:SUBTIPOS_NO_TURNO;
+    subtipoSel.innerHTML=opts.map(([v,l])=>'<option value="'+v+'">'+l+'</option>').join("");
+  }
+  tipoSel.addEventListener("change",syncTipo);
+  syncTipo();
   btn.addEventListener("click",async()=>{
     msg.textContent="";msg.className="tip-msg";
     btn.disabled=true;
-    const body={token,tipo:tipoSel.value};
-    if(tipoSel.value==="turno"){
+    const tipo=tipoSel.value;
+    const body={token,tipo};
+    if(tipo!=="cancelado")body.subtipo=subtipoSel.value;
+    if(tipo==="turno"){
+      body.particular=document.getElementById("tipParticular").checked;
+      body.reprogramado=document.getElementById("tipReprogramado").checked;
       body.cantidad_turnos=parseInt(document.getElementById("tipCantidad").value,10)||1;
       const esp=document.getElementById("tipEspecialidad").value.trim();
       if(esp)body.especialidad=esp;

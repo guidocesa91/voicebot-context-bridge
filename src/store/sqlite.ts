@@ -18,6 +18,9 @@ db.exec(`
     summary TEXT,
     intent TEXT,
     tipo TEXT NOT NULL,
+    subtipo TEXT,
+    particular INTEGER,
+    reprogramado INTEGER,
     cantidad_turnos INTEGER,
     especialidad TEXT,
     observacion TEXT,
@@ -26,17 +29,35 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_llamadas_created_at ON llamadas(created_at);
 `);
 
+// Migracion liviana: agrega columnas nuevas a bases creadas antes de que existiera
+// el desglose tipo/subtipo (no hay libreria de migraciones en el proyecto).
+const existingColumns = new Set(
+  (db.prepare(`PRAGMA table_info(llamadas)`).all() as Array<{ name: string }>).map(
+    (c) => c.name,
+  ),
+);
+for (const [column, ddl] of [
+  ["subtipo", "ALTER TABLE llamadas ADD COLUMN subtipo TEXT"],
+  ["particular", "ALTER TABLE llamadas ADD COLUMN particular INTEGER"],
+  ["reprogramado", "ALTER TABLE llamadas ADD COLUMN reprogramado INTEGER"],
+] as const) {
+  if (!existingColumns.has(column)) db.exec(ddl);
+}
+
 export function insertLlamada(record: LlamadaRecord): void {
   db.prepare(
     `INSERT INTO llamadas
-      (caller_number, conversation_id, summary, intent, tipo, cantidad_turnos, especialidad, observacion, created_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      (caller_number, conversation_id, summary, intent, tipo, subtipo, particular, reprogramado, cantidad_turnos, especialidad, observacion, created_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   ).run(
     record.caller_number,
     record.conversation_id,
     record.summary,
     record.intent,
     record.tipo,
+    record.subtipo ?? null,
+    record.particular ? 1 : 0,
+    record.reprogramado ? 1 : 0,
     record.cantidad_turnos ?? null,
     record.especialidad ?? null,
     record.observacion ?? null,
@@ -57,6 +78,15 @@ export function exportRange(fromISO: string, toISO: string): LlamadaRecord[] {
     .prepare(
       `SELECT * FROM llamadas WHERE created_at >= ? AND created_at <= ? ORDER BY created_at ASC`,
     )
-    .all(fromISO, toISO);
-  return rows as unknown as LlamadaRecord[];
+    .all(fromISO, toISO) as unknown as Array<
+    Omit<LlamadaRecord, "particular" | "reprogramado"> & {
+      particular: number | null;
+      reprogramado: number | null;
+    }
+  >;
+  return rows.map((r) => ({
+    ...r,
+    particular: !!r.particular,
+    reprogramado: !!r.reprogramado,
+  }));
 }

@@ -19,6 +19,9 @@ function record(overrides: Partial<Parameters<typeof insertLlamada>[0]> = {}) {
     summary: "Resumen de prueba",
     intent: "solicitud_turno",
     tipo: "turno" as const,
+    subtipo: "consultorio_especialidad" as const,
+    particular: false,
+    reprogramado: false,
     cantidad_turnos: 2,
     especialidad: "Cardiología",
     observacion: "Prefiere turno mañana",
@@ -43,6 +46,9 @@ describe("insertLlamada / exportRange", () => {
     expect(rows[0]).toMatchObject({
       caller_number: "+5491155554820",
       tipo: "turno",
+      subtipo: "consultorio_especialidad",
+      particular: false,
+      reprogramado: false,
       cantidad_turnos: 2,
       especialidad: "Cardiología",
       observacion: "Prefiere turno mañana",
@@ -61,7 +67,10 @@ describe("insertLlamada / exportRange", () => {
     insertLlamada(
       record({
         conversation_id: "conv_2",
-        tipo: "reclamo",
+        tipo: "no_turno",
+        subtipo: "precio",
+        particular: undefined,
+        reprogramado: undefined,
         cantidad_turnos: undefined,
         especialidad: undefined,
         observacion: undefined,
@@ -75,6 +84,8 @@ describe("insertLlamada / exportRange", () => {
     expect(rows).toHaveLength(1);
     expect(rows[0].cantidad_turnos).toBeNull();
     expect(rows[0].especialidad).toBeNull();
+    expect(rows[0].particular).toBe(false);
+    expect(rows[0].reprogramado).toBe(false);
   });
 });
 

@@ -61,7 +61,7 @@ describe("POST /api/panel/tipificar", () => {
     const res = await app.inject({
       method: "POST",
       url: "/api/panel/tipificar",
-      payload: { token: "garbage", tipo: "reclamo" },
+      payload: { token: "garbage", tipo: "no_turno", subtipo: "precio" },
     });
     expect(res.statusCode).toBe(401);
   });
@@ -77,6 +77,9 @@ describe("POST /api/panel/tipificar", () => {
       payload: {
         token,
         tipo: "turno",
+        subtipo: "consultorio_especialidad",
+        particular: false,
+        reprogramado: false,
         cantidad_turnos: 2,
         especialidad: "Cardiología",
         observacion: "Prefiere la manana",
@@ -90,6 +93,7 @@ describe("POST /api/panel/tipificar", () => {
         summary: "Quiere pedir turno de cardiologia",
         intent: "solicitud_turno",
         tipo: "turno",
+        subtipo: "consultorio_especialidad",
         cantidad_turnos: 2,
         especialidad: "Cardiología",
         observacion: "Prefiere la manana",
@@ -105,7 +109,7 @@ describe("POST /api/panel/tipificar", () => {
     const res = await app.inject({
       method: "POST",
       url: "/api/panel/tipificar",
-      payload: { token, tipo: "reclamo" },
+      payload: { token, tipo: "no_turno", subtipo: "precio" },
     });
     expect(res.statusCode).toBe(200);
     expect(insertLlamada).toHaveBeenCalledWith(
@@ -113,8 +117,25 @@ describe("POST /api/panel/tipificar", () => {
         caller_number: "+5491100000000",
         summary: null,
         intent: null,
-        tipo: "reclamo",
+        tipo: "no_turno",
+        subtipo: "precio",
       }),
+    );
+  });
+
+  it("permite tipo=cancelado sin subtipo", async () => {
+    const token = await signPanelToken({
+      phone: "+5491155554820",
+      conversation_id: "conv_abc123",
+    });
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/panel/tipificar",
+      payload: { token, tipo: "cancelado" },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(insertLlamada).toHaveBeenCalledWith(
+      expect.objectContaining({ tipo: "cancelado", subtipo: undefined }),
     );
   });
 
@@ -131,6 +152,32 @@ describe("POST /api/panel/tipificar", () => {
     expect(res.statusCode).toBe(400);
   });
 
+  it("rejects subtipo que no corresponde al tipo (no_turno con subtipo de turno)", async () => {
+    const token = await signPanelToken({
+      phone: "+5491155554820",
+      conversation_id: "conv_abc123",
+    });
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/panel/tipificar",
+      payload: { token, tipo: "no_turno", subtipo: "reso" },
+    });
+    expect(res.statusCode).toBe(400);
+  });
+
+  it("rejects tipo=turno sin subtipo", async () => {
+    const token = await signPanelToken({
+      phone: "+5491155554820",
+      conversation_id: "conv_abc123",
+    });
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/panel/tipificar",
+      payload: { token, tipo: "turno" },
+    });
+    expect(res.statusCode).toBe(400);
+  });
+
   it("rejects observacion mas larga que 140 caracteres", async () => {
     const token = await signPanelToken({
       phone: "+5491155554820",
@@ -139,7 +186,12 @@ describe("POST /api/panel/tipificar", () => {
     const res = await app.inject({
       method: "POST",
       url: "/api/panel/tipificar",
-      payload: { token, tipo: "reclamo", observacion: "x".repeat(141) },
+      payload: {
+        token,
+        tipo: "no_turno",
+        subtipo: "precio",
+        observacion: "x".repeat(141),
+      },
     });
     expect(res.statusCode).toBe(400);
   });

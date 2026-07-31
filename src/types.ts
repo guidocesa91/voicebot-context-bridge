@@ -30,17 +30,51 @@ export interface HistoryEntry {
   created_at: string;
 }
 
-/** Taxonomia cerrada de tipificacion de llamadas. */
-export type TipoLlamada =
-  | "turno"
-  | "consulta_general"
-  | "reclamo"
-  | "desvio_area"
-  | "otro";
+/** Categoria principal de la tipificacion. Refleja las columnas TURNO/NO TURNO/CANCELADO de la planilla actual. */
+export type TipoLlamada = "turno" | "no_turno" | "cancelado";
+
+/** Subtipos validos cuando tipo = "turno" (tipo de estudio/servicio agendado). */
+export type SubtipoTurno =
+  | "reso"
+  | "tomo"
+  | "eco_doppler"
+  | "eeg"
+  | "emg"
+  | "consultorio_especialidad"
+  | "chequeo_cmi_apto"
+  | "unr"
+  | "cognitiva"
+  | "hospital_dia_cognitiva"
+  | "hospital_dia_psiquiatrico"
+  | "gedyt"
+  | "psoriahue";
+
+/** Subtipos validos cuando tipo = "no_turno" (motivo por el que no se agendo). */
+export type SubtipoNoTurno =
+  | "precio"
+  | "cobertura"
+  | "prestacion"
+  | "sin_agenda"
+  | "whatsapp"
+  | "info_imagenes"
+  | "info_consultorios_externos"
+  | "info_4to_piso"
+  | "orden_vencida"
+  | "email_supervision"
+  | "fecha_turno"
+  | "call_cortada"
+  | "no_portal"
+  | "receta_orden_resultado"
+  | "lab_rx_demanda";
 
 /** Body que manda el panel al tipificar una llamada. */
 export interface TipificacionInput {
   tipo: TipoLlamada;
+  subtipo?: SubtipoTurno | SubtipoNoTurno;
+  /** Paciente sin obra social (equivale a los subtipos "PARTICULAR X" de la planilla). Solo aplica con tipo = "turno". */
+  particular?: boolean;
+  /** La llamada fue para reprogramar un turno ya agendado, no para pedir uno nuevo. Solo aplica con tipo = "turno". */
+  reprogramado?: boolean;
   cantidad_turnos?: number;
   especialidad?: string;
   observacion?: string;

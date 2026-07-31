@@ -25,6 +25,9 @@ backups/*.json
 # Manuales del fabricante: 55 MB entre los dos, se bajan del sitio de Yeastar.
 recursos/manuales/*.pdf
 
+# Planillas de tipificacion actual del cliente: DNI y telefonos reales de pacientes.
+recursos/*.ods
+
 # Documentos generados para mostrar el proyecto (resumenes, PDFs de presentacion).
 # Se regeneran del contenido de los .md del repo; no hace falta versionarlos.
 docu-output/
